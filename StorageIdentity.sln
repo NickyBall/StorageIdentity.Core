@@ -1,0 +1,31 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio 15
+VisualStudioVersion = 15.0.27906.1
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "StorageIdentity", "StorageIdentity\StorageIdentity.csproj", "{81785030-B02A-43B6-9405-0AC641790849}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "StorageIdentityService", "StorageIdentityService\StorageIdentityService.csproj", "{8BFE0527-5F53-4947-8EB2-955DB03DB5C9}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{81785030-B02A-43B6-9405-0AC641790849}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{81785030-B02A-43B6-9405-0AC641790849}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{81785030-B02A-43B6-9405-0AC641790849}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{81785030-B02A-43B6-9405-0AC641790849}.Release|Any CPU.Build.0 = Release|Any CPU
+		{8BFE0527-5F53-4947-8EB2-955DB03DB5C9}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{8BFE0527-5F53-4947-8EB2-955DB03DB5C9}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{8BFE0527-5F53-4947-8EB2-955DB03DB5C9}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{8BFE0527-5F53-4947-8EB2-955DB03DB5C9}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {AAB9CC0A-ADC3-412B-A0B1-1CED7942E6AF}
+	EndGlobalSection
+EndGlobal
