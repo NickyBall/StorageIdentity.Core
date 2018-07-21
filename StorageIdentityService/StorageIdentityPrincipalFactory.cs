@@ -16,9 +16,9 @@ namespace StorageIdentityService
             identity.AddClaim(new Claim(ClaimTypes.Name, user.UserName));
             identity.AddClaim(new Claim(ClaimTypes.Email, user.Email));
 
-            if (user.Role != null)
+            if (user.Roles != null)
             {
-                foreach (var item in user.Role)
+                foreach (var item in user.Roles)
                 {
                     identity.AddClaim(new Claim(ClaimTypes.Role, item));
                 }
