@@ -6,64 +6,131 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Linq;
+using Microsoft.WindowsAzure.Storage.Table;
+using System.Net;
 
 namespace StorageIdentityService
 {
-    public class StorageIdentityUserStorage<TUser> :
-        IUserStore<TUser>,
-        IUserRoleStore<TUser>
-
-        where TUser : StorageIdentityUser
+    public class StorageIdentityUserStorage<TUser> : IUserRoleStore<TUser> where TUser : StorageIdentityUser, new()
     {
-        private readonly IStorageHelper<TUser> Storage;
+        private readonly StorageIdentityContext _db;
 
-        public StorageIdentityUserStorage(IStorageHelper<TUser> Storage)
+        public StorageIdentityUserStorage(IOptions<StorageConfigurations> configs)
         {
-            this.Storage = Storage;
+            _db = new StorageIdentityContext(configs.Value.ConnectionString, configs.Value.PrefixTable);
         }
 
-        public Task AddToRoleAsync(TUser user, string roleName, CancellationToken cancellationToken) => Task.Factory.StartNew(() =>
+        public async Task AddToRoleAsync(TUser user, string roleName, CancellationToken cancellationToken)
         {
-            if (user.Roles.Contains(roleName)) user.Roles.Add(roleName);
-        });
+            await _db.RoleData.ExecuteAsync(TableOperation.Insert(new StorageIdentityRole($"RoleUser_{roleName}", user.RowKey)));
 
-        public Task<IdentityResult> CreateAsync(TUser user, CancellationToken cancellationToken) => Storage.CreateUserAsync(user);
+            await _db.RoleData.ExecuteAsync(TableOperation.Insert(new StorageIdentityRole($"UserRole_{user.RowKey}", roleName)));
+        }
 
-        public Task<IdentityResult> DeleteAsync(TUser user, CancellationToken cancellationToken) => Storage.DeleteUserFromDbAsync(user);
+        public async Task<IdentityResult> CreateAsync(TUser user, CancellationToken cancellationToken)
+        {
+            TableResult InsertResult = await _db.UserData.ExecuteAsync(TableOperation.Insert(user));
+            return InsertResult.HttpStatusCode == HttpStatusCode.NoContent.GetHashCode() ? IdentityResult.Success : IdentityResult.Failed(new IdentityError()
+            {
+                Code = InsertResult.HttpStatusCode.ToString(),
+                Description = "Insert Failed."
+            });
+        }
+
+        public async Task<IdentityResult> DeleteAsync(TUser user, CancellationToken cancellationToken)
+        {
+            TUser User = await FindByIdAsync(user.RowKey, cancellationToken);
+            if (User == null) return IdentityResult.Failed(new IdentityError()
+            {
+                Code = HttpStatusCode.NotFound.ToString(),
+                Description = "User Not Found."
+            });
+
+            User.ETag = "*";
+            TableResult DeleteResult = await _db.UserData.ExecuteAsync(TableOperation.Delete(User));
+            return DeleteResult.HttpStatusCode == HttpStatusCode.NoContent.GetHashCode() ? IdentityResult.Success : IdentityResult.Failed(new IdentityError()
+            {
+                Code = DeleteResult.HttpStatusCode.ToString(),
+                Description = "Delete User Failed."
+            });
+        }
 
         public void Dispose()
         {
             
         }
 
-        public Task<TUser> FindByIdAsync(string userId, CancellationToken cancellationToken) => Storage.SelectUserFromDbAsync(userId);
+        public async Task<TUser> FindByIdAsync(string userId, CancellationToken cancellationToken)
+        {
+            TableResult RetrieveResult = await _db.UserData.ExecuteAsync(TableOperation.Retrieve<TUser>("UserData", userId));
+            return RetrieveResult.HttpStatusCode == HttpStatusCode.OK.GetHashCode() ? (TUser)RetrieveResult.Result : null;
+        }
 
-        public Task<TUser> FindByNameAsync(string normalizedUserName, CancellationToken cancellationToken) => Storage.SelectUserFromDbAsync(normalizedUserName);
+        public Task<TUser> FindByNameAsync(string normalizedUserName, CancellationToken cancellationToken) => FindByIdAsync(normalizedUserName, cancellationToken);
 
         public Task<string> GetNormalizedUserNameAsync(TUser user, CancellationToken cancellationToken) => Task.FromResult(user.NormalizedUserName);
 
-        public Task<IList<string>> GetRolesAsync(TUser user, CancellationToken cancellationToken) => Task.FromResult<IList<string>>(user.Roles);
+        public async Task<IList<string>> GetRolesAsync(TUser user, CancellationToken cancellationToken)
+        {
+            TableQuerySegment Segment = await _db.RoleData.ExecuteQuerySegmentedAsync(new TableQuery().Where($"PartitionKey eq 'UserRole_{user.RowKey}'"), null);
+            return Segment.Count() > 0 ? (IList<string>)Segment.Select(role => role.RowKey) : null;
+        }
 
         public Task<string> GetUserIdAsync(TUser user, CancellationToken cancellationToken) => Task.FromResult(user.Id);
 
         public Task<string> GetUserNameAsync(TUser user, CancellationToken cancellationToken) => Task.FromResult(user.UserName);
 
-        public Task<IList<TUser>> GetUsersInRoleAsync(string roleName, CancellationToken cancellationToken)
+        public async Task<IList<TUser>> GetUsersInRoleAsync(string roleName, CancellationToken cancellationToken)
         {
-            throw new NotImplementedException();
+            TableQuerySegment<TUser> Segment = await _db.RoleData.ExecuteQuerySegmentedAsync(new TableQuery<TUser>().Where($"PartitionKey eq 'UserRole_{roleName}'"), null);
+            return Segment.Count() > 0 ? (IList<TUser>)Segment : null;
         }
 
-        public Task<bool> IsInRoleAsync(TUser user, string roleName, CancellationToken cancellationToken) => Task.FromResult(user.Roles.Contains(roleName));
-
-        public Task RemoveFromRoleAsync(TUser user, string roleName, CancellationToken cancellationToken) => Task.Factory.StartNew(() =>
+        public async Task<bool> IsInRoleAsync(TUser user, string roleName, CancellationToken cancellationToken)
         {
-            if (user.Roles.Contains(roleName)) user.Roles.Remove(roleName);
-        });
+            TableResult RetrieveResult = await _db.RoleData.ExecuteAsync(TableOperation.Retrieve<TUser>($"RoleUser_{roleName}", user.RowKey));
+            return RetrieveResult.HttpStatusCode == HttpStatusCode.OK.GetHashCode();
+        }
+
+        public async Task RemoveFromRoleAsync(TUser user, string roleName, CancellationToken cancellationToken)
+        {
+            TableResult RoleUserData = await _db.RoleData.ExecuteAsync(TableOperation.Retrieve<TUser>($"RoleUser_{roleName}", user.RowKey));
+            if (RoleUserData.HttpStatusCode == HttpStatusCode.OK.GetHashCode())
+            {
+                TUser User = (TUser)RoleUserData.Result;
+                User.ETag = "*";
+                await _db.RoleData.ExecuteAsync(TableOperation.Delete(User));
+            }
+
+            TableResult UserRoleData = await _db.RoleData.ExecuteAsync(TableOperation.Retrieve<TUser>($"UserRole_{user.RowKey}", roleName));
+            if (UserRoleData.HttpStatusCode == HttpStatusCode.OK.GetHashCode())
+            {
+                TUser User = (TUser)UserRoleData.Result;
+                User.ETag = "*";
+                await _db.RoleData.ExecuteAsync(TableOperation.Delete(User));
+            }
+        }
 
         public Task SetNormalizedUserNameAsync(TUser user, string normalizedName, CancellationToken cancellationToken) => Task.Factory.StartNew(() => user.NormalizedUserName = normalizedName);
 
         public Task SetUserNameAsync(TUser user, string userName, CancellationToken cancellationToken) => Task.Factory.StartNew(() => user.UserName = userName);
 
-        public Task<IdentityResult> UpdateAsync(TUser user, CancellationToken cancellationToken) => Storage.UpdateUserAsync(user);
+        public async Task<IdentityResult> UpdateAsync(TUser user, CancellationToken cancellationToken)
+        {
+            // Retrieve
+            TUser User = await FindByIdAsync(user.RowKey, cancellationToken);
+            if (User == null) return IdentityResult.Failed(new IdentityError()
+            {
+                Code = HttpStatusCode.NotFound.ToString(),
+                Description = "User Not Found."
+            });
+
+            // Insert
+            IdentityResult Result = await CreateAsync(user, cancellationToken);
+            if (Result != IdentityResult.Success) return IdentityResult.Failed(Result.Errors.FirstOrDefault());
+
+            // Delete
+            return await DeleteAsync(User, cancellationToken);
+        }
     }
 }

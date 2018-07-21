@@ -17,8 +17,7 @@ namespace StorageIdentityService
                 options.ConnectionString = ConnectionString;
                 options.PrefixTable = TablePrefix;
             });
-
-            services.AddSingleton<IStorageHelper<TUser>, StorageHelper<TUser>>();
+            
             services.AddSingleton<IUserStore<TUser>, StorageIdentityUserStorage<TUser>>();
             services.AddSingleton<IUserRoleStore<TUser>, StorageIdentityUserStorage<TUser>>();
             services.AddSingleton<IRoleStore<TRole>, StorageIdentityRoleStorage<TRole>>();

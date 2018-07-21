@@ -3,6 +3,7 @@ using Microsoft.Extensions.Options;
 using Microsoft.WindowsAzure.Storage.Table;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Net;
 using System.Text;
 using System.Threading;
@@ -34,7 +35,7 @@ namespace StorageIdentityService
 
             if (Role == null) return IdentityResult.Failed(new IdentityError()
             {
-                Code = "404",
+                Code = HttpStatusCode.NotFound.ToString(),
                 Description = "Role Not Found."
             });
 
@@ -82,21 +83,11 @@ namespace StorageIdentityService
             });
 
             // Update (Insert New)
-            TableResult InsertResult = await _db.RoleData.ExecuteAsync(TableOperation.InsertOrReplace(role));
-            if (InsertResult.HttpStatusCode != HttpStatusCode.NoContent.GetHashCode()) return IdentityResult.Failed(new IdentityError()
-            {
-                Code = InsertResult.HttpStatusCode.ToString(),
-                Description = "Update Failed."
-            });
+            IdentityResult Result = await CreateAsync(role, cancellationToken);
+            if (Result != IdentityResult.Success) return IdentityResult.Failed(Result.Errors.FirstOrDefault());
 
             // Delete
-            Role.ETag = "*";
-            TableResult DeleteResult = await _db.RoleData.ExecuteAsync(TableOperation.Delete(Role));
-            return DeleteResult.HttpStatusCode == HttpStatusCode.NoContent.GetHashCode() ? IdentityResult.Success : IdentityResult.Failed(new IdentityError()
-            {
-                Code = DeleteResult.HttpStatusCode.ToString(),
-                Description = "Update Failed."
-            });
+            return await DeleteAsync(Role, cancellationToken);
         }
     }
 }

@@ -10,7 +10,6 @@ namespace StorageIdentityService
 {
     public class StorageIdentityUser : IdentityUser, ITableEntity
     {
-        public List<string> Roles { get; set; }
         public string EmailConfirmToken { get; set; }
         public string PhoneConfirmToken { get; set; }
         public string PhoneWaitConfirm { get; set; }

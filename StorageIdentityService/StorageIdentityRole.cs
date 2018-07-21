@@ -11,7 +11,15 @@ namespace StorageIdentityService
     {
         // PK = "RoleData", RK = {RoleName}
 
-        // PK = "RoleUser_{Username}", RK = {RoleName}
+        // PK = "RoleUser_{RoleName}", RK = {UserName}
+
+        // PK = "UserRole_{UserName}, RK = {RoleName}"
+
+        public StorageIdentityRole(string partitionKey, string rowKey)
+        {
+            PartitionKey = partitionKey;
+            RowKey = rowKey;
+        }
 
         public string PartitionKey { get; set; }
         public string RowKey { get; set; }
