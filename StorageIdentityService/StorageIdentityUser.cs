@@ -21,6 +21,9 @@ namespace StorageIdentityService
         public string RowKey { get; set; }
         public DateTimeOffset Timestamp { get; set; }
         public string ETag { get; set; }
+        public override string Id { get => RowKey; set => RowKey = value; }
+        public override string UserName { get => RowKey; set => RowKey = value; }
+        public override string NormalizedUserName { get => RowKey; set => RowKey = value; }
 
         public void ReadEntity(IDictionary<string, EntityProperty> properties, OperationContext operationContext)
         {

@@ -21,11 +21,14 @@ namespace StorageIdentityService
             services.AddSingleton<IStorageHelper<TUser>, StorageHelper<TUser>>();
             services.AddSingleton<IUserStore<TUser>, StorageIdentityUserStorage<TUser>>();
             services.AddSingleton<IUserRoleStore<TUser>, StorageIdentityUserStorage<TUser>>();
-            //services.AddSingleton<IRoleStore<StorageIdentityRole>, StorageRoleStore>();
+            services.AddSingleton<IRoleStore<TRole>, StorageIdentityRoleStorage<TRole>>();
             services.AddSingleton<IUserClaimsPrincipalFactory<TUser>, StorageIdentityPrincipalFactory<TUser>>();
             services.AddIdentity<TUser, TRole>().AddDefaultTokenProviders();
 
-            return services.AddScoped<StorageIdentityManager<TUser>>();
+            services.AddScoped<UserManager<TUser>>();
+            services.AddScoped<RoleManager<TRole>>();
+
+            return services;
         }
     }
 }

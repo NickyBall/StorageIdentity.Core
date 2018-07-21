@@ -11,14 +11,19 @@ namespace StorageIdentityService
         public CloudTable UserData { get { ThrowIfDisposed(); return _UserData; } set { _UserData = value; } }
         private CloudTable _UserData;
 
+        public CloudTable RoleData { get { ThrowIfDisposed(); return _RoleData; } set { _RoleData = value; } }
+        private CloudTable _RoleData;
 
         #region Initialization
         private CloudTableClient CloudStorageClient = null;
         public StorageIdentityContext(string ConnectionString, string PrefixTable)
         {
             CloudStorageClient = CloudStorageAccount.Parse(ConnectionString).CreateCloudTableClient();
-            _UserData = CloudStorageClient.GetTableReference(PrefixTable + "UserData");
+            _UserData = CloudStorageClient.GetTableReference(PrefixTable + "StorageUser");
+            _RoleData = CloudStorageClient.GetTableReference(PrefixTable + "StorageRole");
+
             _UserData.CreateIfNotExistsAsync();
+            _RoleData.CreateIfNotExistsAsync();
         }
         private bool _disposed = false;
         ~StorageIdentityContext()
@@ -44,6 +49,7 @@ namespace StorageIdentityService
                 //Insert Remove on this!!!!!
                 _disposed = true;
                 _UserData = null;
+                _RoleData = null;
             }
         }
         #endregion 
