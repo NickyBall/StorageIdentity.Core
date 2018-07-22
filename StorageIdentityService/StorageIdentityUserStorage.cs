@@ -11,7 +11,11 @@ using System.Net;
 
 namespace StorageIdentityService
 {
-    public class StorageIdentityUserStorage<TUser> : IUserRoleStore<TUser> where TUser : StorageIdentityUser, new()
+    public class StorageIdentityUserStorage<TUser> : 
+        IUserRoleStore<TUser>,
+        //IPasswordHasher<TUser>,
+        IUserPasswordStore<TUser>
+        where TUser : StorageIdentityUser, new()
     {
         private readonly StorageIdentityContext _db;
 
@@ -29,6 +33,7 @@ namespace StorageIdentityService
 
         public async Task<IdentityResult> CreateAsync(TUser user, CancellationToken cancellationToken)
         {
+            user.PartitionKey = user.PartitionKey ?? "UserData";
             TableResult InsertResult = await _db.UserData.ExecuteAsync(TableOperation.Insert(user));
             return InsertResult.HttpStatusCode == HttpStatusCode.NoContent.GetHashCode() ? IdentityResult.Success : IdentityResult.Failed(new IdentityError()
             {
@@ -70,6 +75,8 @@ namespace StorageIdentityService
 
         public Task<string> GetNormalizedUserNameAsync(TUser user, CancellationToken cancellationToken) => Task.FromResult(user.NormalizedUserName);
 
+        public Task<string> GetPasswordHashAsync(TUser user, CancellationToken cancellationToken) => Task.FromResult(user.PasswordHash);
+
         public async Task<IList<string>> GetRolesAsync(TUser user, CancellationToken cancellationToken)
         {
             TableQuerySegment Segment = await _db.RoleData.ExecuteQuerySegmentedAsync(new TableQuery().Where($"PartitionKey eq 'UserRole_{user.RowKey}'"), null);
@@ -85,6 +92,13 @@ namespace StorageIdentityService
             TableQuerySegment<TUser> Segment = await _db.RoleData.ExecuteQuerySegmentedAsync(new TableQuery<TUser>().Where($"PartitionKey eq 'UserRole_{roleName}'"), null);
             return Segment.Count() > 0 ? (IList<TUser>)Segment : null;
         }
+
+        public string HashPassword(TUser user, string password)
+        {
+            throw new NotImplementedException();
+        }
+
+        public Task<bool> HasPasswordAsync(TUser user, CancellationToken cancellationToken) => Task.FromResult(string.IsNullOrEmpty(user.PasswordHash));
 
         public async Task<bool> IsInRoleAsync(TUser user, string roleName, CancellationToken cancellationToken)
         {
@@ -113,6 +127,11 @@ namespace StorageIdentityService
 
         public Task SetNormalizedUserNameAsync(TUser user, string normalizedName, CancellationToken cancellationToken) => Task.Factory.StartNew(() => user.NormalizedUserName = normalizedName);
 
+        public Task SetPasswordHashAsync(TUser user, string passwordHash, CancellationToken cancellationToken) => Task.Factory.StartNew(() =>
+        {
+            user.PasswordHash = passwordHash;
+        });
+
         public Task SetUserNameAsync(TUser user, string userName, CancellationToken cancellationToken) => Task.Factory.StartNew(() => user.UserName = userName);
 
         public async Task<IdentityResult> UpdateAsync(TUser user, CancellationToken cancellationToken)
@@ -131,6 +150,11 @@ namespace StorageIdentityService
 
             // Delete
             return await DeleteAsync(User, cancellationToken);
+        }
+
+        public PasswordVerificationResult VerifyHashedPassword(TUser user, string hashedPassword, string providedPassword)
+        {
+            throw new NotImplementedException();
         }
     }
 }

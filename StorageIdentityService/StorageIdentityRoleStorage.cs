@@ -20,6 +20,7 @@ namespace StorageIdentityService
         }
         public async Task<IdentityResult> CreateAsync(TRole role, CancellationToken cancellationToken)
         {
+            role.PartitionKey = role.PartitionKey ?? "RoleData";
             TableResult InsertResult = await _db.RoleData.ExecuteAsync(TableOperation.Insert(role));
 
             return InsertResult.HttpStatusCode == HttpStatusCode.NoContent.GetHashCode() ? IdentityResult.Success : IdentityResult.Failed(new IdentityError()
