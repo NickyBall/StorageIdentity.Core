@@ -75,20 +75,26 @@ namespace StorageIdentityService
 
         public async Task<IdentityResult> UpdateAsync(TRole role, CancellationToken cancellationToken)
         {
-            // Retrieve
-            TRole Role = await FindByIdAsync(role.RowKey, cancellationToken);
-            if (Role == null) return IdentityResult.Failed(new IdentityError()
+            TableResult UpdateResult = await _db.UserData.ExecuteAsync(TableOperation.InsertOrReplace(role));
+            return UpdateResult.HttpStatusCode == HttpStatusCode.NoContent.GetHashCode() ? IdentityResult.Success : IdentityResult.Failed(new IdentityError()
             {
-                Code = HttpStatusCode.NotFound.ToString(),
-                Description = "Role Not Found."
+                Code = UpdateResult.HttpStatusCode.ToString(),
+                Description = "Update Role Fail."
             });
+            //// Retrieve
+            //TRole Role = await FindByIdAsync(role.RowKey, cancellationToken);
+            //if (Role == null) return IdentityResult.Failed(new IdentityError()
+            //{
+            //    Code = HttpStatusCode.NotFound.ToString(),
+            //    Description = "Role Not Found."
+            //});
 
-            // Update (Insert New)
-            IdentityResult Result = await CreateAsync(role, cancellationToken);
-            if (Result != IdentityResult.Success) return IdentityResult.Failed(Result.Errors.FirstOrDefault());
+            //// Update (Insert New)
+            //IdentityResult Result = await CreateAsync(role, cancellationToken);
+            //if (Result != IdentityResult.Success) return IdentityResult.Failed(Result.Errors.FirstOrDefault());
 
-            // Delete
-            return await DeleteAsync(Role, cancellationToken);
+            //// Delete
+            //return await DeleteAsync(Role, cancellationToken);
         }
     }
 }

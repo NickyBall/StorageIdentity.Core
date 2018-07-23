@@ -14,7 +14,9 @@ namespace StorageIdentityService
     public class StorageIdentityUserStorage<TUser> : 
         IUserRoleStore<TUser>,
         //IPasswordHasher<TUser>,
-        IUserPasswordStore<TUser>
+        IUserPasswordStore<TUser>,
+        IUserEmailStore<TUser>,
+        IUserPhoneNumberStore<TUser>
         where TUser : StorageIdentityUser, new()
     {
         private readonly StorageIdentityContext _db;
@@ -65,6 +67,13 @@ namespace StorageIdentityService
             
         }
 
+        public async Task<TUser> FindByEmailAsync(string normalizedEmail, CancellationToken cancellationToken)
+        {
+            TableQuerySegment<TUser> Segment = await _db.UserData.ExecuteQuerySegmentedAsync(new TableQuery<TUser>().Where($"Email eq '{normalizedEmail}'"), null);
+            if (Segment.Count() > 0) return Segment.FirstOrDefault();
+            return null;
+        }
+
         public async Task<TUser> FindByIdAsync(string userId, CancellationToken cancellationToken)
         {
             TableResult RetrieveResult = await _db.UserData.ExecuteAsync(TableOperation.Retrieve<TUser>("UserData", userId));
@@ -73,9 +82,19 @@ namespace StorageIdentityService
 
         public Task<TUser> FindByNameAsync(string normalizedUserName, CancellationToken cancellationToken) => FindByIdAsync(normalizedUserName, cancellationToken);
 
+        public Task<string> GetEmailAsync(TUser user, CancellationToken cancellationToken) => Task.FromResult(user.Email);
+
+        public Task<bool> GetEmailConfirmedAsync(TUser user, CancellationToken cancellationToken) => Task.FromResult(user.EmailConfirmed);
+
+        public Task<string> GetNormalizedEmailAsync(TUser user, CancellationToken cancellationToken) => Task.FromResult(user.NormalizedEmail);
+
         public Task<string> GetNormalizedUserNameAsync(TUser user, CancellationToken cancellationToken) => Task.FromResult(user.NormalizedUserName);
 
         public Task<string> GetPasswordHashAsync(TUser user, CancellationToken cancellationToken) => Task.FromResult(user.PasswordHash);
+
+        public Task<string> GetPhoneNumberAsync(TUser user, CancellationToken cancellationToken) => Task.FromResult(user.PhoneNumber);
+
+        public Task<bool> GetPhoneNumberConfirmedAsync(TUser user, CancellationToken cancellationToken) => Task.FromResult(user.PhoneNumberConfirmed);
 
         public async Task<IList<string>> GetRolesAsync(TUser user, CancellationToken cancellationToken)
         {
@@ -93,12 +112,7 @@ namespace StorageIdentityService
             return Segment.Count() > 0 ? (IList<TUser>)Segment : null;
         }
 
-        public string HashPassword(TUser user, string password)
-        {
-            throw new NotImplementedException();
-        }
-
-        public Task<bool> HasPasswordAsync(TUser user, CancellationToken cancellationToken) => Task.FromResult(string.IsNullOrEmpty(user.PasswordHash));
+        public Task<bool> HasPasswordAsync(TUser user, CancellationToken cancellationToken) => Task.FromResult(!string.IsNullOrEmpty(user.PasswordHash));
 
         public async Task<bool> IsInRoleAsync(TUser user, string roleName, CancellationToken cancellationToken)
         {
@@ -125,36 +139,45 @@ namespace StorageIdentityService
             }
         }
 
+        public Task SetEmailAsync(TUser user, string email, CancellationToken cancellationToken) => Task.Factory.StartNew(() => user.Email = email);
+
+        public Task SetEmailConfirmedAsync(TUser user, bool confirmed, CancellationToken cancellationToken) => Task.Factory.StartNew(() => user.EmailConfirmed = confirmed);
+
+        public Task SetNormalizedEmailAsync(TUser user, string normalizedEmail, CancellationToken cancellationToken) => Task.Factory.StartNew(() => user.NormalizedEmail = normalizedEmail);
+
         public Task SetNormalizedUserNameAsync(TUser user, string normalizedName, CancellationToken cancellationToken) => Task.Factory.StartNew(() => user.NormalizedUserName = normalizedName);
 
-        public Task SetPasswordHashAsync(TUser user, string passwordHash, CancellationToken cancellationToken) => Task.Factory.StartNew(() =>
-        {
-            user.PasswordHash = passwordHash;
-        });
+        public Task SetPasswordHashAsync(TUser user, string passwordHash, CancellationToken cancellationToken) => Task.Factory.StartNew(() => user.PasswordHash = passwordHash);
+
+        public Task SetPhoneNumberAsync(TUser user, string phoneNumber, CancellationToken cancellationToken) => Task.Factory.StartNew(() => user.PhoneNumber = phoneNumber);
+
+        public Task SetPhoneNumberConfirmedAsync(TUser user, bool confirmed, CancellationToken cancellationToken) => Task.Factory.StartNew(() => user.PhoneNumberConfirmed = confirmed);
 
         public Task SetUserNameAsync(TUser user, string userName, CancellationToken cancellationToken) => Task.Factory.StartNew(() => user.UserName = userName);
 
         public async Task<IdentityResult> UpdateAsync(TUser user, CancellationToken cancellationToken)
         {
-            // Retrieve
-            TUser User = await FindByIdAsync(user.RowKey, cancellationToken);
-            if (User == null) return IdentityResult.Failed(new IdentityError()
+            TableResult UpdateResult = await _db.UserData.ExecuteAsync(TableOperation.InsertOrReplace(user));
+            return UpdateResult.HttpStatusCode == HttpStatusCode.NoContent.GetHashCode() ? IdentityResult.Success : IdentityResult.Failed(new IdentityError()
             {
-                Code = HttpStatusCode.NotFound.ToString(),
-                Description = "User Not Found."
+                Code = UpdateResult.HttpStatusCode.ToString(),
+                Description = "Update User Failed."
             });
 
-            // Insert
-            IdentityResult Result = await CreateAsync(user, cancellationToken);
-            if (Result != IdentityResult.Success) return IdentityResult.Failed(Result.Errors.FirstOrDefault());
+            //// Retrieve
+            //TUser User = await FindByIdAsync(user.RowKey, cancellationToken);
+            //if (User == null) return IdentityResult.Failed(new IdentityError()
+            //{
+            //    Code = HttpStatusCode.NotFound.ToString(),
+            //    Description = "User Not Found."
+            //});
 
-            // Delete
-            return await DeleteAsync(User, cancellationToken);
-        }
+            //// Insert
+            //IdentityResult Result = await CreateAsync(user, cancellationToken);
+            //if (Result != IdentityResult.Success) return IdentityResult.Failed(Result.Errors.FirstOrDefault());
 
-        public PasswordVerificationResult VerifyHashedPassword(TUser user, string hashedPassword, string providedPassword)
-        {
-            throw new NotImplementedException();
+            //// Delete
+            //return await DeleteAsync(User, cancellationToken);
         }
     }
 }
