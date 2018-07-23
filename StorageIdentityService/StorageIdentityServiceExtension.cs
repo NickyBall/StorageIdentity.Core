@@ -1,4 +1,5 @@
 ﻿using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Identity.UI.Services;
 using Microsoft.Extensions.DependencyInjection;
 using System;
 using System.Collections.Generic;
@@ -23,6 +24,8 @@ namespace StorageIdentityService
             services.AddSingleton<IPasswordHasher<TUser>, PasswordHasher<TUser>>();
             services.AddSingleton<IRoleStore<TRole>, StorageIdentityRoleStorage<TRole>>();
             services.AddSingleton<IUserClaimsPrincipalFactory<TUser>, StorageIdentityPrincipalFactory<TUser>>();
+            services.AddSingleton<IUserLockoutStore<TUser>, StorageIdentityUserStorage<TUser>>();
+            services.AddSingleton<IUserTwoFactorStore<TUser>, StorageIdentityUserStorage<TUser>>();
             //services.AddIdentity<TUser, TRole>().AddDefaultTokenProviders();
 
             services.AddScoped<SignInManager<TUser>>();

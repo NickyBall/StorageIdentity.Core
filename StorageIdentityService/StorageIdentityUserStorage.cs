@@ -16,7 +16,9 @@ namespace StorageIdentityService
         //IPasswordHasher<TUser>,
         IUserPasswordStore<TUser>,
         IUserEmailStore<TUser>,
-        IUserPhoneNumberStore<TUser>
+        IUserPhoneNumberStore<TUser>,
+        IUserLockoutStore<TUser>,
+        IUserTwoFactorStore<TUser>
         where TUser : StorageIdentityUser, new()
     {
         private readonly StorageIdentityContext _db;
@@ -82,9 +84,15 @@ namespace StorageIdentityService
 
         public Task<TUser> FindByNameAsync(string normalizedUserName, CancellationToken cancellationToken) => FindByIdAsync(normalizedUserName, cancellationToken);
 
+        public Task<int> GetAccessFailedCountAsync(TUser user, CancellationToken cancellationToken) => Task.FromResult(user.AccessFailedCount);
+
         public Task<string> GetEmailAsync(TUser user, CancellationToken cancellationToken) => Task.FromResult(user.Email);
 
         public Task<bool> GetEmailConfirmedAsync(TUser user, CancellationToken cancellationToken) => Task.FromResult(user.EmailConfirmed);
+
+        public Task<bool> GetLockoutEnabledAsync(TUser user, CancellationToken cancellationToken) => Task.FromResult(user.LockoutEnabled);
+
+        public Task<DateTimeOffset?> GetLockoutEndDateAsync(TUser user, CancellationToken cancellationToken) => Task.FromResult(user.LockoutEnd);
 
         public Task<string> GetNormalizedEmailAsync(TUser user, CancellationToken cancellationToken) => Task.FromResult(user.NormalizedEmail);
 
@@ -102,6 +110,8 @@ namespace StorageIdentityService
             return Segment.Count() > 0 ? (IList<string>)Segment.Select(role => role.RowKey) : null;
         }
 
+        public Task<bool> GetTwoFactorEnabledAsync(TUser user, CancellationToken cancellationToken) => Task.FromResult(user.TwoFactorEnabled);
+
         public Task<string> GetUserIdAsync(TUser user, CancellationToken cancellationToken) => Task.FromResult(user.Id);
 
         public Task<string> GetUserNameAsync(TUser user, CancellationToken cancellationToken) => Task.FromResult(user.UserName);
@@ -113,6 +123,8 @@ namespace StorageIdentityService
         }
 
         public Task<bool> HasPasswordAsync(TUser user, CancellationToken cancellationToken) => Task.FromResult(!string.IsNullOrEmpty(user.PasswordHash));
+
+        public Task<int> IncrementAccessFailedCountAsync(TUser user, CancellationToken cancellationToken) => Task.FromResult(++user.AccessFailedCount);
 
         public async Task<bool> IsInRoleAsync(TUser user, string roleName, CancellationToken cancellationToken)
         {
@@ -139,9 +151,15 @@ namespace StorageIdentityService
             }
         }
 
+        public Task ResetAccessFailedCountAsync(TUser user, CancellationToken cancellationToken) => Task.Factory.StartNew(() => user.AccessFailedCount = 0);
+
         public Task SetEmailAsync(TUser user, string email, CancellationToken cancellationToken) => Task.Factory.StartNew(() => user.Email = email);
 
         public Task SetEmailConfirmedAsync(TUser user, bool confirmed, CancellationToken cancellationToken) => Task.Factory.StartNew(() => user.EmailConfirmed = confirmed);
+
+        public Task SetLockoutEnabledAsync(TUser user, bool enabled, CancellationToken cancellationToken) => Task.Factory.StartNew(() => user.LockoutEnabled = enabled);
+
+        public Task SetLockoutEndDateAsync(TUser user, DateTimeOffset? lockoutEnd, CancellationToken cancellationToken) => Task.Factory.StartNew(() => user.LockoutEnd = lockoutEnd);
 
         public Task SetNormalizedEmailAsync(TUser user, string normalizedEmail, CancellationToken cancellationToken) => Task.Factory.StartNew(() => user.NormalizedEmail = normalizedEmail);
 
@@ -152,6 +170,8 @@ namespace StorageIdentityService
         public Task SetPhoneNumberAsync(TUser user, string phoneNumber, CancellationToken cancellationToken) => Task.Factory.StartNew(() => user.PhoneNumber = phoneNumber);
 
         public Task SetPhoneNumberConfirmedAsync(TUser user, bool confirmed, CancellationToken cancellationToken) => Task.Factory.StartNew(() => user.PhoneNumberConfirmed = confirmed);
+
+        public Task SetTwoFactorEnabledAsync(TUser user, bool enabled, CancellationToken cancellationToken) => Task.Factory.StartNew(() => user.TwoFactorEnabled = enabled);
 
         public Task SetUserNameAsync(TUser user, string userName, CancellationToken cancellationToken) => Task.Factory.StartNew(() => user.UserName = userName);
 
