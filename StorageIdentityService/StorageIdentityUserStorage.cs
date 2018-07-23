@@ -11,14 +11,16 @@ using System.Net;
 
 namespace StorageIdentityService
 {
-    public class StorageIdentityUserStorage<TUser> : 
+    public class StorageIdentityUserStorage<TUser> :
+        IUserStore<TUser>,
         IUserRoleStore<TUser>,
-        //IPasswordHasher<TUser>,
         IUserPasswordStore<TUser>,
         IUserEmailStore<TUser>,
         IUserPhoneNumberStore<TUser>,
         IUserLockoutStore<TUser>,
-        IUserTwoFactorStore<TUser>
+        IUserTwoFactorStore<TUser>,
+        IUserSecurityStampStore<TUser>,
+        IQueryableUserStore<TUser>
         where TUser : StorageIdentityUser, new()
     {
         private readonly StorageIdentityContext _db;
@@ -26,6 +28,16 @@ namespace StorageIdentityService
         public StorageIdentityUserStorage(IOptions<StorageConfigurations> configs)
         {
             _db = new StorageIdentityContext(configs.Value.ConnectionString, configs.Value.PrefixTable);
+        }
+
+        public IQueryable<TUser> Users
+        {
+            get
+            {
+                TableQuerySegment<TUser> Segment = _db.UserData.ExecuteQuerySegmentedAsync(new TableQuery<TUser>().Where($"PartitionKey eq 'UserData'"), null).GetAwaiter().GetResult();
+                if (Segment.Count() > 0) return Segment.AsQueryable();
+                return null;
+            }
         }
 
         public async Task AddToRoleAsync(TUser user, string roleName, CancellationToken cancellationToken)
@@ -110,6 +122,8 @@ namespace StorageIdentityService
             return Segment.Count() > 0 ? (IList<string>)Segment.Select(role => role.RowKey) : null;
         }
 
+        public Task<string> GetSecurityStampAsync(TUser user, CancellationToken cancellationToken) => Task.FromResult(user.SecurityStamp);
+
         public Task<bool> GetTwoFactorEnabledAsync(TUser user, CancellationToken cancellationToken) => Task.FromResult(user.TwoFactorEnabled);
 
         public Task<string> GetUserIdAsync(TUser user, CancellationToken cancellationToken) => Task.FromResult(user.Id);
@@ -170,6 +184,8 @@ namespace StorageIdentityService
         public Task SetPhoneNumberAsync(TUser user, string phoneNumber, CancellationToken cancellationToken) => Task.Factory.StartNew(() => user.PhoneNumber = phoneNumber);
 
         public Task SetPhoneNumberConfirmedAsync(TUser user, bool confirmed, CancellationToken cancellationToken) => Task.Factory.StartNew(() => user.PhoneNumberConfirmed = confirmed);
+
+        public Task SetSecurityStampAsync(TUser user, string stamp, CancellationToken cancellationToken) => Task.Factory.StartNew(() => user.SecurityStamp = stamp);
 
         public Task SetTwoFactorEnabledAsync(TUser user, bool enabled, CancellationToken cancellationToken) => Task.Factory.StartNew(() => user.TwoFactorEnabled = enabled);
 
