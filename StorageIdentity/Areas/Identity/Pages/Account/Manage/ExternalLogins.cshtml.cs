@@ -6,17 +6,18 @@ using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
+using StorageIdentityService;
 
 namespace StorageIdentity.Areas.Identity.Pages.Account.Manage
 {
     public class ExternalLoginsModel : PageModel
     {
-        private readonly UserManager<IdentityUser> _userManager;
-        private readonly SignInManager<IdentityUser> _signInManager;
+        private readonly UserManager<StorageIdentityUser> _userManager;
+        private readonly SignInManager<StorageIdentityUser> _signInManager;
 
         public ExternalLoginsModel(
-            UserManager<IdentityUser> userManager,
-            SignInManager<IdentityUser> signInManager)
+            UserManager<StorageIdentityUser> userManager,
+            SignInManager<StorageIdentityUser> signInManager)
         {
             _userManager = userManager;
             _signInManager = signInManager;
