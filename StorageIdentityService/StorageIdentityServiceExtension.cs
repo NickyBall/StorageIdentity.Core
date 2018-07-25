@@ -25,7 +25,7 @@ namespace StorageIdentityService
             services.AddSingleton<IUserClaimsPrincipalFactory<TUser>, StorageIdentityPrincipalFactory<TUser>>();
             services.AddSingleton<IUserLockoutStore<TUser>, StorageIdentityUserStorage<TUser>>();
             services.AddSingleton<IUserTwoFactorStore<TUser>, StorageIdentityUserStorage<TUser>>();
-            //services.AddIdentity<TUser, TRole>().AddDefaultTokenProviders();
+            services.AddIdentity<TUser, TRole>().AddDefaultTokenProviders();
 
             services.AddScoped<SignInManager<TUser>>();
             services.AddScoped<UserManager<TUser>>();

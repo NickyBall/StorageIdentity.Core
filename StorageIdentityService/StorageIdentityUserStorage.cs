@@ -20,10 +20,21 @@ namespace StorageIdentityService
         IUserLockoutStore<TUser>,
         IUserTwoFactorStore<TUser>,
         IUserSecurityStampStore<TUser>,
+        IUserAuthenticationTokenStore<TUser>,
+        IUserAuthenticatorKeyStore<TUser>,
+        IUserTwoFactorRecoveryCodeStore<TUser>,
         IQueryableUserStore<TUser>
         where TUser : StorageIdentityUser, new()
     {
         private readonly StorageIdentityContext _db;
+
+        private const string InternalLoginProvider = "[AspNetUserStore]";
+
+        private const string AuthenticatorKeyTokenName = "AuthenticatorKey";
+
+        private const string RecoveryCodeTokenName = "RecoveryCodes";
+
+        private bool _disposed = false;
 
         public StorageIdentityUserStorage(IOptions<StorageConfigurations> configs)
         {
@@ -45,6 +56,40 @@ namespace StorageIdentityService
             await _db.RoleData.ExecuteAsync(TableOperation.Insert(new StorageIdentityRole($"RoleUser_{roleName}", user.RowKey)));
 
             await _db.RoleData.ExecuteAsync(TableOperation.Insert(new StorageIdentityRole($"UserRole_{user.RowKey}", roleName)));
+        }
+
+        public async Task<int> CountCodesAsync(TUser user, CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            ThrowIfDisposed();
+
+
+
+            if (user == null)
+
+            {
+
+                throw new ArgumentNullException(nameof(user));
+
+            }
+
+            var mergedCodes = await GetTokenAsync(user, InternalLoginProvider, RecoveryCodeTokenName, cancellationToken) ?? "";
+
+            if (mergedCodes.Length > 0)
+
+            {
+
+                return mergedCodes.Split(';').Length;
+
+            }
+
+            return 0;
+        }
+
+        protected void ThrowIfDisposed()
+        {
+            //if (_disposed)throw new ObjectDisposedException(GetType().Name);
         }
 
         public async Task<IdentityResult> CreateAsync(TUser user, CancellationToken cancellationToken)
@@ -78,7 +123,7 @@ namespace StorageIdentityService
 
         public void Dispose()
         {
-            
+            _disposed = true;
         }
 
         public async Task<TUser> FindByEmailAsync(string normalizedEmail, CancellationToken cancellationToken)
@@ -97,6 +142,8 @@ namespace StorageIdentityService
         public Task<TUser> FindByNameAsync(string normalizedUserName, CancellationToken cancellationToken) => FindByIdAsync(normalizedUserName, cancellationToken);
 
         public Task<int> GetAccessFailedCountAsync(TUser user, CancellationToken cancellationToken) => Task.FromResult(user.AccessFailedCount);
+
+        public Task<string> GetAuthenticatorKeyAsync(TUser user, CancellationToken cancellationToken) => GetTokenAsync(user, InternalLoginProvider, AuthenticatorKeyTokenName, cancellationToken);
 
         public Task<string> GetEmailAsync(TUser user, CancellationToken cancellationToken) => Task.FromResult(user.Email);
 
@@ -124,6 +171,36 @@ namespace StorageIdentityService
 
         public Task<string> GetSecurityStampAsync(TUser user, CancellationToken cancellationToken) => Task.FromResult(user.SecurityStamp);
 
+        public async Task<string> GetTokenAsync(TUser user, string loginProvider, string name, CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            ThrowIfDisposed();
+
+            if (user == null)
+
+            {
+
+                throw new ArgumentNullException(nameof(user));
+
+            }
+
+            var entry = await FindTokenAsync(user, loginProvider, name, cancellationToken);
+
+            return entry?.Value;
+        }
+
+        private async Task<StorageIdentityUserToken> FindTokenAsync(TUser user, string loginProvider, string name, CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            ThrowIfDisposed();
+
+            if (user == null) throw new ArgumentNullException(nameof(user));
+            
+            TableResult RetrieveResult = await _db.UserTokenData.ExecuteAsync(TableOperation.Retrieve<StorageIdentityUserToken>($"UserTokenData_{loginProvider}", user.Id));
+            return RetrieveResult.HttpStatusCode == HttpStatusCode.OK.GetHashCode() ? (StorageIdentityUserToken)RetrieveResult.Result : null;
+        }
+
         public Task<bool> GetTwoFactorEnabledAsync(TUser user, CancellationToken cancellationToken) => Task.FromResult(user.TwoFactorEnabled);
 
         public Task<string> GetUserIdAsync(TUser user, CancellationToken cancellationToken) => Task.FromResult(user.Id);
@@ -146,6 +223,29 @@ namespace StorageIdentityService
             return RetrieveResult.HttpStatusCode == HttpStatusCode.OK.GetHashCode();
         }
 
+        public async Task<bool> RedeemCodeAsync(TUser user, string code, CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            ThrowIfDisposed();
+
+            if (user == null) throw new ArgumentNullException(nameof(user));
+
+            if (code == null) throw new ArgumentNullException(nameof(code));
+
+            var mergedCodes = await GetTokenAsync(user, InternalLoginProvider, RecoveryCodeTokenName, cancellationToken) ?? "";
+
+            var splitCodes = mergedCodes.Split(';');
+
+            if (splitCodes.Contains(code))
+            {
+                var updatedCodes = new List<string>(splitCodes.Where(s => s != code));
+                await ReplaceCodesAsync(user, updatedCodes, cancellationToken);
+                return true;
+            }
+
+            return false;
+        }
+
         public async Task RemoveFromRoleAsync(TUser user, string roleName, CancellationToken cancellationToken)
         {
             TableResult RoleUserData = await _db.RoleData.ExecuteAsync(TableOperation.Retrieve<TUser>($"RoleUser_{roleName}", user.RowKey));
@@ -165,7 +265,34 @@ namespace StorageIdentityService
             }
         }
 
+        public async Task RemoveTokenAsync(TUser user, string loginProvider, string name, CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            ThrowIfDisposed();
+
+            if (user == null)throw new ArgumentNullException(nameof(user));
+
+            var entry = await FindTokenAsync(user, loginProvider, name, cancellationToken);
+
+            if (entry != null) await RemoveUserTokenAsync(entry);
+        }
+
+        private async Task RemoveUserTokenAsync(StorageIdentityUserToken entry)
+        {
+            entry.ETag = "*";
+            TableResult DeleteResult = await _db.UserTokenData.ExecuteAsync(TableOperation.Delete(entry));
+        }
+
+        public Task ReplaceCodesAsync(TUser user, IEnumerable<string> recoveryCodes, CancellationToken cancellationToken)
+        {
+            var mergedCodes = string.Join(";", recoveryCodes);
+
+            return SetTokenAsync(user, InternalLoginProvider, RecoveryCodeTokenName, mergedCodes, cancellationToken);
+        }
+
         public Task ResetAccessFailedCountAsync(TUser user, CancellationToken cancellationToken) => Task.Factory.StartNew(() => user.AccessFailedCount = 0);
+
+        public Task SetAuthenticatorKeyAsync(TUser user, string key, CancellationToken cancellationToken) => SetTokenAsync(user, InternalLoginProvider, AuthenticatorKeyTokenName, key, cancellationToken);
 
         public Task SetEmailAsync(TUser user, string email, CancellationToken cancellationToken) => Task.Factory.StartNew(() => user.Email = email);
 
@@ -186,6 +313,32 @@ namespace StorageIdentityService
         public Task SetPhoneNumberConfirmedAsync(TUser user, bool confirmed, CancellationToken cancellationToken) => Task.Factory.StartNew(() => user.PhoneNumberConfirmed = confirmed);
 
         public Task SetSecurityStampAsync(TUser user, string stamp, CancellationToken cancellationToken) => Task.Factory.StartNew(() => user.SecurityStamp = stamp);
+
+        public async Task SetTokenAsync(TUser user, string loginProvider, string name, string value, CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            ThrowIfDisposed();
+            if (user == null) throw new ArgumentNullException(nameof(user));
+
+            var token = await FindTokenAsync(user, loginProvider, name, cancellationToken);
+
+            if (token == null) await AddUserTokenAsync(new StorageIdentityUserToken()
+            {
+                PartitionKey = $"UserTokenData_{loginProvider}",
+                RowKey = user.Id,
+                LoginProvider = loginProvider,
+                Name = name,
+                Value = value,
+                UserId = user.Id
+            });
+
+            else token.Value = value;
+        }
+
+        private async Task AddUserTokenAsync(StorageIdentityUserToken UserToken)
+        {
+            TableResult InsertResult = await _db.UserTokenData.ExecuteAsync(TableOperation.Insert(UserToken));
+        }
 
         public Task SetTwoFactorEnabledAsync(TUser user, bool enabled, CancellationToken cancellationToken) => Task.Factory.StartNew(() => user.TwoFactorEnabled = enabled);
 
