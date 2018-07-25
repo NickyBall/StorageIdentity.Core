@@ -166,7 +166,8 @@ namespace StorageIdentityService
         public async Task<IList<string>> GetRolesAsync(TUser user, CancellationToken cancellationToken)
         {
             TableQuerySegment Segment = await _db.RoleData.ExecuteQuerySegmentedAsync(new TableQuery().Where($"PartitionKey eq 'UserRole_{user.RowKey}'"), null);
-            return Segment.Count() > 0 ? (IList<string>)Segment.Select(role => role.RowKey) : null;
+            //if (Segment.Count() > 0) { IList<string> x = Segment.Select(role => role.RowKey).ToList(); }
+            return Segment.Count() > 0 ? Segment.Select(role => role.RowKey).ToList() : null;
         }
 
         public Task<string> GetSecurityStampAsync(TUser user, CancellationToken cancellationToken) => Task.FromResult(user.SecurityStamp);
