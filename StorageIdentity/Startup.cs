@@ -33,7 +33,7 @@ namespace StorageIdentity
                 options.MinimumSameSitePolicy = SameSiteMode.None;
             });
 
-            services.AddStorageIdentityService<StorageIdentityUser, StorageIdentityRole>("UseDevelopmentStorage=true", "Sx");
+            services.AddStorageIdentityService<StorageIdentityUser, StorageIdentityRole, StorageIdentityUserClaim, StorageIdentityUserLogin, StorageIdentityUserToken>("UseDevelopmentStorage=true", "Sx");
 
 
             services.AddMvc().SetCompatibilityVersion(CompatibilityVersion.Version_2_1)

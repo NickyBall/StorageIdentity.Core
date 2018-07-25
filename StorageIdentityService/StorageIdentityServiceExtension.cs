@@ -9,22 +9,25 @@ namespace StorageIdentityService
 {
     public static class StorageIdentityServiceExtension
     {
-        public static IServiceCollection AddStorageIdentityService<TUser, TRole>(this IServiceCollection services, string ConnectionString, string TablePrefix) 
+        public static IServiceCollection AddStorageIdentityService<TUser, TRole, TUserClaim, TUserLogin, TUserToken>(this IServiceCollection services, string ConnectionString, string TablePrefix) 
             where TUser : StorageIdentityUser, new() 
             where TRole : StorageIdentityRole
+            where TUserClaim : StorageIdentityUserClaim, new()
+            where TUserLogin : StorageIdentityUserLogin, new()
+            where TUserToken : StorageIdentityUserToken, new()
         {
             services.Configure<StorageConfigurations>(options =>
             {
                 options.ConnectionString = ConnectionString;
                 options.PrefixTable = TablePrefix;
             });
-            services.AddSingleton<IUserStore<TUser>, StorageIdentityUserStorage<TUser>>();
-            services.AddSingleton<IUserRoleStore<TUser>, StorageIdentityUserStorage<TUser>>();
+            services.AddSingleton<IUserStore<TUser>, StorageIdentityUserStorage<TUser, TUserClaim, TUserLogin, TUserToken>>();
+            services.AddSingleton<IUserRoleStore<TUser>, StorageIdentityUserStorage<TUser, TUserClaim, TUserLogin, TUserToken>>();
             services.AddSingleton<IPasswordHasher<TUser>, PasswordHasher<TUser>>();
             services.AddSingleton<IRoleStore<TRole>, StorageIdentityRoleStorage<TRole>>();
             services.AddSingleton<IUserClaimsPrincipalFactory<TUser>, StorageIdentityPrincipalFactory<TUser>>();
-            services.AddSingleton<IUserLockoutStore<TUser>, StorageIdentityUserStorage<TUser>>();
-            services.AddSingleton<IUserTwoFactorStore<TUser>, StorageIdentityUserStorage<TUser>>();
+            services.AddSingleton<IUserLockoutStore<TUser>, StorageIdentityUserStorage<TUser, TUserClaim, TUserLogin, TUserToken>>();
+            services.AddSingleton<IUserTwoFactorStore<TUser>, StorageIdentityUserStorage<TUser, TUserClaim, TUserLogin, TUserToken>>();
             services.AddIdentity<TUser, TRole>().AddDefaultTokenProviders();
 
             services.AddScoped<SignInManager<TUser>>();

@@ -17,6 +17,12 @@ namespace StorageIdentityService
         public CloudTable UserTokenData { get { ThrowIfDisposed(); return _UserTokenData; } set { _UserTokenData = value; } }
         private CloudTable _UserTokenData;
 
+        public CloudTable UserLoginData { get { ThrowIfDisposed(); return _UserLoginData; } set { _UserLoginData = value; } }
+        private CloudTable _UserLoginData;
+
+        public CloudTable UserClaimData { get { ThrowIfDisposed(); return _UserClaimData; } set { _UserClaimData = value; } }
+        private CloudTable _UserClaimData;
+
         #region Initialization
         private CloudTableClient CloudStorageClient = null;
         public StorageIdentityContext(string ConnectionString, string PrefixTable)
@@ -25,10 +31,14 @@ namespace StorageIdentityService
             _UserData = CloudStorageClient.GetTableReference(PrefixTable + "StorageUser");
             _RoleData = CloudStorageClient.GetTableReference(PrefixTable + "StorageRole");
             _UserTokenData = CloudStorageClient.GetTableReference(PrefixTable + "StorageUserToken");
+            _UserLoginData = CloudStorageClient.GetTableReference(PrefixTable + "StorageUserLogin");
+            _UserClaimData = CloudStorageClient.GetTableReference(PrefixTable + "StorageUserClaim");
 
             _UserData.CreateIfNotExistsAsync();
             _RoleData.CreateIfNotExistsAsync();
             _UserTokenData.CreateIfNotExistsAsync();
+            _UserLoginData.CreateIfNotExistsAsync();
+            _UserClaimData.CreateIfNotExistsAsync();
         }
         private bool _disposed = false;
         ~StorageIdentityContext()

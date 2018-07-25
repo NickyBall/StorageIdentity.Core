@@ -8,12 +8,14 @@ using System.Threading.Tasks;
 using System.Linq;
 using Microsoft.WindowsAzure.Storage.Table;
 using System.Net;
+using System.Security.Claims;
 
 namespace StorageIdentityService
 {
-    public class StorageIdentityUserStorage<TUser> :
-        IUserStore<TUser>,
+    public class StorageIdentityUserStorage<TUser, TUserClaim, TUserLogin, TUserToken> :
+        IUserLoginStore<TUser>,
         IUserRoleStore<TUser>,
+        IUserClaimStore<TUser>,
         IUserPasswordStore<TUser>,
         IUserEmailStore<TUser>,
         IUserPhoneNumberStore<TUser>,
@@ -25,6 +27,9 @@ namespace StorageIdentityService
         IUserTwoFactorRecoveryCodeStore<TUser>,
         IQueryableUserStore<TUser>
         where TUser : StorageIdentityUser, new()
+        where TUserClaim : StorageIdentityUserClaim, new()
+        where TUserLogin : StorageIdentityUserLogin, new()
+        where TUserToken : StorageIdentityUserToken, new()
     {
         private readonly StorageIdentityContext _db;
 
@@ -191,7 +196,7 @@ namespace StorageIdentityService
             return entry?.Value;
         }
 
-        private async Task<StorageIdentityUserToken> FindTokenAsync(TUser user, string loginProvider, string name, CancellationToken cancellationToken)
+        private async Task<TUserToken> FindTokenAsync(TUser user, string loginProvider, string name, CancellationToken cancellationToken)
         {
             cancellationToken.ThrowIfCancellationRequested();
             ThrowIfDisposed();
@@ -199,7 +204,7 @@ namespace StorageIdentityService
             if (user == null) throw new ArgumentNullException(nameof(user));
             
             TableResult RetrieveResult = await _db.UserTokenData.ExecuteAsync(TableOperation.Retrieve<StorageIdentityUserToken>($"UserTokenData_{loginProvider}", user.Id));
-            return RetrieveResult.HttpStatusCode == HttpStatusCode.OK.GetHashCode() ? (StorageIdentityUserToken)RetrieveResult.Result : null;
+            return RetrieveResult.HttpStatusCode == HttpStatusCode.OK.GetHashCode() ? (TUserToken)RetrieveResult.Result : null;
         }
 
         public Task<bool> GetTwoFactorEnabledAsync(TUser user, CancellationToken cancellationToken) => Task.FromResult(user.TwoFactorEnabled);
@@ -278,7 +283,7 @@ namespace StorageIdentityService
             if (entry != null) await RemoveUserTokenAsync(entry);
         }
 
-        private async Task RemoveUserTokenAsync(StorageIdentityUserToken entry)
+        private async Task RemoveUserTokenAsync(TUserToken entry)
         {
             entry.ETag = "*";
             TableResult DeleteResult = await _db.UserTokenData.ExecuteAsync(TableOperation.Delete(entry));
@@ -323,7 +328,7 @@ namespace StorageIdentityService
 
             var token = await FindTokenAsync(user, loginProvider, name, cancellationToken);
 
-            if (token == null) await AddUserTokenAsync(new StorageIdentityUserToken()
+            if (token == null) await AddUserTokenAsync(new TUserToken()
             {
                 PartitionKey = $"UserTokenData_{loginProvider}",
                 RowKey = user.Id,
@@ -336,7 +341,7 @@ namespace StorageIdentityService
             else token.Value = value;
         }
 
-        private async Task AddUserTokenAsync(StorageIdentityUserToken UserToken)
+        private async Task AddUserTokenAsync(TUserToken UserToken)
         {
             TableResult InsertResult = await _db.UserTokenData.ExecuteAsync(TableOperation.Insert(UserToken));
         }
@@ -368,6 +373,116 @@ namespace StorageIdentityService
 
             //// Delete
             //return await DeleteAsync(User, cancellationToken);
+        }
+
+        public async Task AddLoginAsync(TUser user, UserLoginInfo login, CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            ThrowIfDisposed();
+            if (user == null)
+            {
+                throw new ArgumentNullException(nameof(user));
+            }
+            if (login == null)
+            {
+                throw new ArgumentNullException(nameof(login));
+            }
+            TableResult InsertResult = await _db.UserLoginData.ExecuteAsync(TableOperation.Insert(new TUserLogin()
+            {
+                PartitionKey = $"user.Id_{login.LoginProvider}",
+                RowKey = login.ProviderKey,
+                LoginProvider = login.LoginProvider,
+                ProviderDisplayName = login.ProviderDisplayName,
+                ProviderKey = login.ProviderKey
+            }));
+        }
+
+        public async Task RemoveLoginAsync(TUser user, string loginProvider, string providerKey, CancellationToken cancellationToken)
+        {
+            var UserLogin = await FindByLoginAsync(loginProvider, providerKey, cancellationToken);
+
+            if (UserLogin == null) return;
+
+            UserLogin.ETag = "*";
+            TableResult DeleteResult = await _db.UserLoginData.ExecuteAsync(TableOperation.Delete(UserLogin));
+        }
+
+        public async Task<IList<UserLoginInfo>> GetLoginsAsync(TUser user, CancellationToken cancellationToken)
+        {
+            TableQuerySegment<TUserLogin> Segment = await _db.UserLoginData.ExecuteQuerySegmentedAsync(new TableQuery<TUserLogin>().Where($"UserId eq '{user.Id}'"), null);
+            return Segment.Count() > 0 ? Segment.Select(ul => new UserLoginInfo(ul.LoginProvider, ul.ProviderKey, ul.ProviderDisplayName)).ToList() : null;
+        }
+
+        public async Task<TUser> FindByLoginAsync(string loginProvider, string providerKey, CancellationToken cancellationToken)
+        {
+            TableResult RetrieveResult = await _db.UserLoginData.ExecuteAsync(TableOperation.Retrieve<TUserLogin>(loginProvider, providerKey));
+            TUserLogin UserLogin = RetrieveResult.HttpStatusCode == HttpStatusCode.OK.GetHashCode() ? (TUserLogin)RetrieveResult.Result : null;
+            if (UserLogin == null) return null;
+            var User = await FindByIdAsync(UserLogin.UserId, cancellationToken);
+            return User;
+        }
+
+        public async Task<IList<Claim>> GetClaimsAsync(TUser user, CancellationToken cancellationToken)
+        {
+            TableQuerySegment<TUserClaim> Segment = await _db.UserClaimData.ExecuteQuerySegmentedAsync(new TableQuery<TUserClaim>().Where($"PartitionKey eq '{user.Id}'"), null);
+            return Segment.Count() > 0 ? Segment.Select(uc => uc.ToClaim()).ToList() : null;
+        }
+
+        public async Task AddClaimsAsync(TUser user, IEnumerable<Claim> claims, CancellationToken cancellationToken)
+        {
+            TableBatchOperation Batch = new TableBatchOperation();
+            foreach (Claim claim in claims)
+            {
+                Batch.Add(TableOperation.Insert(new TUserClaim()
+                {
+                    PartitionKey = user.Id,
+                    RowKey = claim.Type,
+                    UserId = user.Id,
+                    ClaimType = claim.Type,
+                    ClaimValue = claim.Value
+                }));
+            }
+            var Results = await _db.UserClaimData.ExecuteBatchAsync(Batch);
+        }
+
+        public async Task ReplaceClaimAsync(TUser user, Claim claim, Claim newClaim, CancellationToken cancellationToken)
+        {
+            TableResult ReplaceResult = await _db.UserClaimData.ExecuteAsync(TableOperation.InsertOrReplace(new TUserClaim()
+            {
+                PartitionKey = user.Id,
+                RowKey = newClaim.Type,
+                UserId = user.Id,
+                ClaimType = newClaim.Type,
+                ClaimValue = newClaim.Value
+            }));
+        }
+
+        public async Task RemoveClaimsAsync(TUser user, IEnumerable<Claim> claims, CancellationToken cancellationToken)
+        {
+            TableBatchOperation Batch = new TableBatchOperation();
+            foreach (Claim claim in claims)
+            {
+                TableResult RetrieveResult = await _db.UserClaimData.ExecuteAsync(TableOperation.Retrieve<TUserClaim>(user.Id, claim.Type));
+                if (RetrieveResult.HttpStatusCode == HttpStatusCode.OK.GetHashCode())
+                {
+                    TUserClaim Claim = (TUserClaim)RetrieveResult.Result;
+                    Claim.ETag = "*";
+                    Batch.Add(TableOperation.Delete(Claim));
+                }
+            }
+            var Results = await _db.UserClaimData.ExecuteBatchAsync(Batch);
+        }
+
+        public async Task<IList<TUser>> GetUsersForClaimAsync(Claim claim, CancellationToken cancellationToken)
+        {
+            TableQuerySegment<TUserClaim> Segment = await _db.UserClaimData.ExecuteQuerySegmentedAsync(new TableQuery<TUserClaim>().Where($"ClaimType eq '{claim.Type}' and ClaimValue eq '{claim.Value}'"), null);
+            List<TUser> Users = new List<TUser>();
+            foreach (var uc in Segment)
+            {
+                var User = await FindByIdAsync(uc.UserId, cancellationToken);
+                Users.Add(User);
+            }
+            return Users;
         }
     }
 }
