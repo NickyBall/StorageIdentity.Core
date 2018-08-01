@@ -24,6 +24,24 @@ namespace StorageIdentityService
      */
     public static class StorageIdentityServiceExtension
     {
+        public static IServiceCollection AddStorageIdentityService(this IServiceCollection services, string ConnectionString, string TablePrefix)
+        {
+            return services.AddStorageIdentityService<StorageIdentityUser, StorageIdentityRole, StorageIdentityUserClaim, StorageIdentityUserLogin, StorageIdentityUserToken>(ConnectionString, TablePrefix);
+        }
+
+        public static IServiceCollection AddStorageIdentityService<TUser>(this IServiceCollection services, string ConnectionString, string TablePrefix)
+            where TUser : StorageIdentityUser, new()
+        {
+            return services.AddStorageIdentityService<TUser, StorageIdentityRole, StorageIdentityUserClaim, StorageIdentityUserLogin, StorageIdentityUserToken>(ConnectionString, TablePrefix);
+        }
+
+        public static IServiceCollection AddStorageIdentityService<TUser, TRole>(this IServiceCollection services, string ConnectionString, string TablePrefix)
+            where TUser : StorageIdentityUser, new()
+            where TRole : StorageIdentityRole
+        {
+            return services.AddStorageIdentityService<TUser, TRole, StorageIdentityUserClaim, StorageIdentityUserLogin, StorageIdentityUserToken>(ConnectionString, TablePrefix);
+        }
+
         public static IServiceCollection AddStorageIdentityService<TUser, TRole, TUserClaim, TUserLogin, TUserToken>(this IServiceCollection services, string ConnectionString, string TablePrefix) 
             where TUser : StorageIdentityUser, new() 
             where TRole : StorageIdentityRole
@@ -51,5 +69,7 @@ namespace StorageIdentityService
 
             return services;
         }
+
+        
     }
 }
